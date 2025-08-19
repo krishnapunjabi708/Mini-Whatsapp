@@ -4,6 +4,7 @@ const express = require("express");
 const app = express();
 const mongoose = require("mongoose");
 const methodOverride = require("method-override");
+const Chat = require("./models/chat.js");
 
 // Views and static files are located one level up from /api
 const VIEWS_PATH = path.join(__dirname, "..", "views");
