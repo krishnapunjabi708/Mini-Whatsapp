@@ -1,99 +1,99 @@
+require('dotenv').config();
+const path = require("path");
 const express = require("express");
 const app = express();
-const path=require("path");
-const mongoose=require("mongoose");
-const methodOverride=require("method-override");
+const mongoose = require("mongoose");
+const methodOverride = require("method-override");
+const Chat = require("./models/chat.js");
 
-const Chat=require("./models/chat.js");
-app.set("views",path.join(__dirname,"views"));
-app.set("view engine","ejs");
-app.use(express.static(path.join(__dirname,"public"))); //to connect the styleheet to ejs
-app.use(express.urlencoded({ extended:true }));
+// Views and static files are located one level up from /api
+const VIEWS_PATH = path.join(__dirname, "..", "views");
+const STATIC_PATH = path.join(__dirname, "..", "public");
+app.set("views", VIEWS_PATH);
+app.set("view engine", "ejs");
+app.use(express.static(STATIC_PATH));
+app.use(express.urlencoded({ extended: true }));
 app.use(methodOverride("_method"));
-main().then(()=>{
-    console.log("connection successful");
-}).catch(err => console.log(err));
 
+// MongoDB connection
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/KrishnaDatabase";
+mongoose.connect(MONGODB_URI)
+  .then(() => console.log("MongoDB connected"))
+  .catch(err => console.error("MongoDB connection error:", err));
 
-// Index Route
-app.get("/chats",async (req,res)=>{
-let chats=await Chat.find();
+// Models
+const Chat = require("../models/chat");
 
-res.render("index.ejs",{ chats });
-
-
+// Routes
+app.get("/", (req, res) => {
+  return res.redirect("/chats");
 });
 
-// New Route
-app.get("/chats/new",(req,res)=>{
-res.render("new.ejs");
+app.get("/chats", async (req, res) => {
+  try {
+    const chats = await Chat.find().sort({ created_at: -1 });
+    res.render("index", { chats });
+  } catch (e) {
+    console.error(e);
+    res.status(500).send("Server Error");
+  }
 });
 
-// Create Route
-app.post("/chats",(req,res)=>{
-let {from,to,msg}=req.body;
-let newChat=new Chat({
-  from:from,
-  to:to,
-  msg:msg,
-  created_at:new Date()
-});
-newChat.
-      save().
-      then((res)=>{
-         console.log("Chat was Saved");
-        }).catch((err)=>{
-          consol.log(err);
-        });
-
-res.redirect("/chats");
+app.get("/chats/new", (req, res) => {
+  res.render("new");
 });
 
-// Edit Route
-app.get("/chats/:id/edit",async (req,res)=>{
-  let {id}=req.params;
-  let chat=await Chat.findById(id);
-res.render("edit.ejs",{ chat });
+app.post("/chats", async (req, res) => {
+  try {
+    const { from, to, msg } = req.body;
+    const chat = new Chat({ from, to, msg, created_at: new Date() });
+    await chat.save();
+    res.redirect("/chats");
+  } catch (e) {
+    console.error(e);
+    res.status(400).send("Bad Request");
+  }
 });
 
-// Update route
-app.put("/chats/:id",async (req,res)=>{
-let {id}=req.params;
-let {msg:newMsg}=req.body;
-let updateChat=await Chat.findByIdAndUpdate(id,{msg : newMsg},{runValidators:true,new:true});
-console.log(updateChat);
-res.redirect("/chats");
+app.get("/chats/:id/edit", async (req, res) => {
+  try {
+    const chat = await Chat.findById(req.params.id);
+    if (!chat) return res.status(404).send("Not Found");
+    res.render("edit", { chat });
+  } catch (e) {
+    console.error(e);
+    res.status(500).send("Server Error");
+  }
 });
 
-// DELETE or Destroy the Route
-app.delete("/chats/:id",async (req,res)=>{
-let { id }=req.params;
-let deletedChat=await Chat.findByIdAndDelete(id);
-console.log(deletedChat);
-res.redirect("/chats");
+app.put("/chats/:id", async (req, res) => {
+  try {
+    const { msg } = req.body;
+    await Chat.findByIdAndUpdate(req.params.id, { msg });
+    res.redirect("/chats");
+  } catch (e) {
+    console.error(e);
+    res.status(400).send("Bad Request");
+  }
 });
 
-async function main() {
-  await mongoose.connect('mongodb://127.0.0.1:27017/Whatsapp');
+app.delete("/chats/:id", async (req, res) => {
+  try {
+    await Chat.findByIdAndDelete(req.params.id);
+    res.redirect("/chats");
+  } catch (e) {
+    console.error(e);
+    res.status(500).send("Server Error");
+  }
+});
 
-  // use `await mongoose.connect('mongodb://user:password@127.0.0.1:27017/test');` if your database has auth enabled
+// Export as serverless function handler for Vercel
+const serverless = require("serverless-http");
+
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => console.log(`Local server listening on port ${PORT}`));
+} else {
+  module.exports = serverless(app);
 }
 
-// let chat1=new Chat({
-//   from:"neha",
-//   to:"priya",
-//   msg:"send me your exam ",
-//   created_at:new Date()
-// })
-// chat1.save().then(res=>{
-//   console.log(res);
-// })
-
-app.get("/",(req,res)=>{
-res.send("Server is working")
-});
-
-
-app.listen(8080, () => {
-  console.log("Server is Running on Server 8080");
-});
